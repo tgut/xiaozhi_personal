@@ -17,6 +17,8 @@
 #include "protocol.h"
 #include "ota.h"
 #include "background_task.h"
+#include "wav_file_writer.h"
+#include "ble_file_transfer.h"
 
 #if CONFIG_USE_WAKE_WORD_DETECT
 #include "wake_word_detect.h"

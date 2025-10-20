@@ -132,6 +132,15 @@ void MqttProtocol::SendAudio(const std::vector<uint8_t>& data) {
         return;
     }
     udp_->Send(encrypted);
+
+    FILE* fp = fopen("/mqtt/spiffs/audio_send.bin", "ab"); // 追加写入
+    if (fp != nullptr) {
+        fwrite(data.data(), 1, data.size(), fp);
+        fclose(fp);
+        ESP_LOGI(TAG, "mqtt write message success");
+    } else {
+        ESP_LOGI(TAG, "Failed to open audio file for mqtt writing");
+    }
 }
 
 void MqttProtocol::CloseAudioChannel() {

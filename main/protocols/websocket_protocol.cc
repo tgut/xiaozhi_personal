@@ -26,11 +26,20 @@ void WebsocketProtocol::Start() {
 }
 
 void WebsocketProtocol::SendAudio(const std::vector<uint8_t>& data) {
+    // 继续通过websocket发送音频数据
     if (websocket_ == nullptr) {
         return;
     }
-
     websocket_->Send(data.data(), data.size(), true);
+        // 保存音频数据到本地文件
+    FILE* fp = fopen("/spiffs/audio_send.bin", "ab"); // 追加写入
+    if (fp != nullptr) {
+        fwrite(data.data(), 1, data.size(), fp);
+        fclose(fp);
+        ESP_LOGI(TAG, "write message success");
+    } else {
+        ESP_LOGI(TAG, "Failed to open audio file for writing");
+    }
 }
 
 void WebsocketProtocol::SendText(const std::string& text) {

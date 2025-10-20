@@ -425,7 +425,8 @@ void Application::Start() {
             } else if (strcmp(state->valuestring, "sentence_start") == 0) {
                 auto text = cJSON_GetObjectItem(root, "text");
                 if (text != NULL) {
-                    ESP_LOGI(TAG, "<< %s", text->valuestring);
+                    ESP_LOGI(TAG, "<< %s hi", text->valuestring);
+                    ESP_LOGI(TAG, "Displaying assistant message test app flash");
                     Schedule([this, display, message = std::string(text->valuestring)]() {
                         display->SetChatMessage("assistant", message.c_str());
                     });
@@ -691,11 +692,28 @@ void Application::InputAudio() {
         wake_word_detect_.Feed(data);
     }
 #endif
-#if CONFIG_USE_AUDIO_PROCESSOR
+    // 保存WAV文件
+    std::string wav_path = WavFileWriter::GetNextFilename();
+    WavFileWriter::WriteWav(wav_path, data, codec->input_sample_rate(), codec->input_channels());
+
+    // 语音播报：正在传输数据
+    PlaySound("正在传输数据");
+
+    // BLE自动传输
+    static BleFileTransfer ble_transfer;
+    if (ble_transfer.IsConnected()) {
+        ble_transfer.SendFile(wav_path);
+        PlaySound("传输完成");
+    } else {
+        ESP_LOGW("App", "BLE未连接，无法传输");
+    }
+
+    // ...原有对话处理逻辑...
+    #if CONFIG_USE_AUDIO_PROCESSOR
     if (audio_processor_.IsRunning()) {
         audio_processor_.Input(data);
     }
-#else
+    #else
     if (device_state_ == kDeviceStateListening) {
         background_task_->Schedule([this, data = std::move(data)]() mutable {
             opus_encoder_->Encode(std::move(data), [this](std::vector<uint8_t>&& opus) {
@@ -705,7 +723,7 @@ void Application::InputAudio() {
             });
         });
     }
-#endif
+    #endif
 }
 
 void Application::AbortSpeaking(AbortReason reason) {
