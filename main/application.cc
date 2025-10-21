@@ -4,8 +4,10 @@
 #include "system_info.h"
 #include "ml307_ssl_transport.h"
 #include "audio_codec.h"
+#if !CONFIG_LOCAL_AUDIO_ONLY
 #include "mqtt_protocol.h"
 #include "websocket_protocol.h"
+#endif
 #include "font_awesome_symbols.h"
 #include "iot/thing_manager.h"
 #include "assets/lang_config.h"
@@ -356,10 +358,9 @@ void Application::Start() {
         vTaskDelete(NULL);
     }, "main_loop", 4096 * 2, this, 3, nullptr);
 
-    /* Wait for the network to be ready */
+    /* Wait for the network to be ready (skipped in local-only mode) */
+#if !CONFIG_LOCAL_AUDIO_ONLY
     board.StartNetwork();
-
-    // Initialize the protocol
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
 #ifdef CONFIG_CONNECTION_TYPE_WEBSOCKET
     protocol_ = std::make_unique<WebsocketProtocol>();
@@ -459,9 +460,13 @@ void Application::Start() {
         }
     });
     protocol_->Start();
+#endif // !CONFIG_LOCAL_AUDIO_ONLY
 
     // Check for new firmware version or get the MQTT broker address
     ota_.SetCheckVersionUrl(CONFIG_OTA_VERSION_URL);
+#if CONFIG_LOCAL_AUDIO_ONLY
+    // 在本地模式下不启动版本检查任务及云端交互
+#else
     ota_.SetHeader("Device-Id", SystemInfo::GetMacAddress().c_str());
     ota_.SetHeader("Client-Id", board.GetUuid());
     ota_.SetHeader("Accept-Language", Lang::CODE);
@@ -473,6 +478,7 @@ void Application::Start() {
         app->CheckNewVersion();
         vTaskDelete(NULL);
     }, "check_new_version", 4096 * 2, this, 2, nullptr);
+#endif
 
 #if CONFIG_USE_AUDIO_PROCESSOR
     audio_processor_.Initialize(codec->input_channels(), codec->input_reference());
@@ -692,23 +698,18 @@ void Application::InputAudio() {
         wake_word_detect_.Feed(data);
     }
 #endif
-    // 保存WAV文件
+    // 保存本地 WAV 并通过 BLE 发送（本地模式亦保留）
     std::string wav_path = WavFileWriter::GetNextFilename();
     WavFileWriter::WriteWav(wav_path, data, codec->input_sample_rate(), codec->input_channels());
-
-    // 语音播报：正在传输数据
-    PlaySound("正在传输数据");
-
-    // BLE自动传输
     static BleFileTransfer ble_transfer;
     if (ble_transfer.IsConnected()) {
         ble_transfer.SendFile(wav_path);
-        PlaySound("传输完成");
-    } else {
-        ESP_LOGW("App", "BLE未连接，无法传输");
     }
 
-    // ...原有对话处理逻辑...
+#if CONFIG_LOCAL_AUDIO_ONLY
+    // 本地模式下不做云端编码/发送
+    return;
+#endif
     #if CONFIG_USE_AUDIO_PROCESSOR
     if (audio_processor_.IsRunning()) {
         audio_processor_.Input(data);

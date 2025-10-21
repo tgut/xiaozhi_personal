@@ -6,6 +6,11 @@ config OTA_VERSION_URL
     help
         The application will access this URL to check for updates.
 
+config LOCAL_AUDIO_ONLY
+    bool "仅本地录音 + BLE 传输 (关闭 WiFi/云通信/对话)"
+    default n
+    help
+        选择后将不初始化网络与云协议, 只保留本地录音保存及 BLE 文件传输功能。
 
 choice
     prompt "语言选择"
@@ -29,6 +34,7 @@ choice CONNECTION_TYPE
     default CONNECTION_TYPE_MQTT_UDP
     help
         网络数据传输协议
+    depends on !LOCAL_AUDIO_ONLY
     config CONNECTION_TYPE_MQTT_UDP
         bool "MQTT + UDP"
     config CONNECTION_TYPE_WEBSOCKET
@@ -36,14 +42,14 @@ choice CONNECTION_TYPE
 endchoice
 
 config WEBSOCKET_URL
-    depends on CONNECTION_TYPE_WEBSOCKET
+    depends on CONNECTION_TYPE_WEBSOCKET && !LOCAL_AUDIO_ONLY
     string "Websocket URL"
     default "wss://api.tenclass.net/xiaozhi/v1/"
     help
         Communication with the server through websocket after wake up.
 
 config WEBSOCKET_ACCESS_TOKEN
-    depends on CONNECTION_TYPE_WEBSOCKET
+    depends on CONNECTION_TYPE_WEBSOCKET && !LOCAL_AUDIO_ONLY
     string "Websocket Access Token"
     default "test-token"
     help
@@ -199,12 +205,14 @@ config USE_AUDIO_PROCESSOR
     default y
     depends on IDF_TARGET_ESP32S3 && USE_AFE
     help
-        需要 ESP32 S3 与 AFE 支持
+        需要 ESP32 S3 与 AFE 支持 (本地模式下同样可用)
 
 config USE_WAKE_WORD_DETECT
     bool "启用唤醒词检测"
-    default y
+    default y if !LOCAL_AUDIO_ONLY
+    default n if LOCAL_AUDIO_ONLY
     depends on IDF_TARGET_ESP32S3 && USE_AFE
     help
-        需要 ESP32 S3 与 AFE 支持
+        需要 ESP32 S3 与 AFE 支持 (本地模式下自动关闭)
+
 endmenu
