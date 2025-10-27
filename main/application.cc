@@ -543,6 +543,9 @@ void Application::Start() {
     wake_word_detect_.StartDetection();
 #endif
 
+    // BLE will be initialized on first audio input to avoid startup conflicts
+    ESP_LOGI(TAG, "BLE file transfer will be initialized on first audio input");
+
     SetDeviceState(kDeviceStateIdle);
     esp_timer_start_periodic(clock_timer_handle_, 1000000);
 }
@@ -701,9 +704,29 @@ void Application::InputAudio() {
     // 保存本地 WAV 并通过 BLE 发送（本地模式亦保留）
     std::string wav_path = WavFileWriter::GetNextFilename();
     WavFileWriter::WriteWav(wav_path, data, codec->input_sample_rate(), codec->input_channels());
+
+    // Initialize BLE file transfer with one-time initialization (delayed to avoid startup conflicts)
     static BleFileTransfer ble_transfer;
-    if (ble_transfer.IsConnected()) {
+    static bool ble_initialized = false;
+    if (!ble_initialized) {
+        ESP_LOGI(TAG, "=== First audio input - initializing BLE file transfer ===");
+        try {
+            ble_transfer.Init([](bool success) {
+                ESP_LOGI(TAG, "BLE file transfer init result: %s", success ? "SUCCESS" : "FAILED");
+            });
+            ble_initialized = true;
+            ESP_LOGI(TAG, "BLE initialization completed successfully");
+        } catch (...) {
+            ESP_LOGE(TAG, "BLE initialization failed - will retry next time");
+        }
+    }
+
+    // Send WAV file via BLE if connected
+    if (ble_initialized && ble_transfer.IsConnected()) {
+        ESP_LOGI(TAG, "Sending WAV file via BLE: %s", wav_path.c_str());
         ble_transfer.SendFile(wav_path);
+    } else {
+        ESP_LOGD(TAG, "No BLE device connected, WAV file saved locally: %s", wav_path.c_str());
     }
 
 #if CONFIG_LOCAL_AUDIO_ONLY

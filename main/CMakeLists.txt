@@ -169,10 +169,15 @@ endif()
 
 idf_component_register(SRCS ${SOURCES}
                     PRIV_REQUIRES bt esp-opus esp_app_format spi_flash app_update
+                    REQUIRES bt
                     EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
                     INCLUDE_DIRS ${INCLUDE_DIRS}
                     WHOLE_ARCHIVE
                     )
+
+# 确保BLE库被正确链接
+target_link_libraries(${COMPONENT_LIB} INTERFACE
+                      idf::bt)
 
 # 使用 target_compile_definitions 来定义 BOARD_TYPE, BOARD_NAME
 # 如果 BOARD_NAME 为空，则使用 BOARD_TYPE
